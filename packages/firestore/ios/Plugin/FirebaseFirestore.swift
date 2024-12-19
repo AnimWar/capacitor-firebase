@@ -5,6 +5,7 @@ import FirebaseFirestore
 @objc public class FirebaseFirestore: NSObject {
     private let plugin: FirebaseFirestorePlugin
     private var listenerRegistrationMap: [String: ListenerRegistration] = [:]
+    private let queue = DispatchQueue(label: "com.yourapp.firestoreListenerQueue")
 
     init(plugin: FirebaseFirestorePlugin) {
         self.plugin = plugin
@@ -208,7 +209,9 @@ import FirebaseFirestore
                 completion(result, nil)
             }
         }
-        self.listenerRegistrationMap[callbackId] = listenerRegistration
+        queue.sync {
+            self.listenerRegistrationMap[callbackId] = listenerRegistration
+        }
     }
 
     @objc public func addCollectionSnapshotListener(_ options: AddCollectionSnapshotListenerOptions, completion: @escaping (Result?, Error?) -> Void) {
@@ -241,7 +244,9 @@ import FirebaseFirestore
                         completion(result, nil)
                     }
                 }
-                self.listenerRegistrationMap[callbackId] = listenerRegistration
+                queue.sync {
+                    self.listenerRegistrationMap[callbackId] = listenerRegistration
+                }
             } catch {
                 completion(nil, error)
             }
@@ -278,7 +283,9 @@ import FirebaseFirestore
                         completion(result, nil)
                     }
                 }
-                self.listenerRegistrationMap[callbackId] = listenerRegistration
+                queue.sync {
+                    self.listenerRegistrationMap[callbackId] = listenerRegistration
+                }
             } catch {
                 completion(nil, error)
             }
@@ -286,18 +293,24 @@ import FirebaseFirestore
     }
 
     @objc public func removeSnapshotListener(_ options: RemoveSnapshotListenerOptions) {
-        let callbackId = options.getCallbackId()
+        queue.sync {
+            let callbackId = options.getCallbackId()
 
-        if let listenerRegistration = self.listenerRegistrationMap[callbackId] {
-            listenerRegistration.remove()
+            if let listenerRegistration = self.listenerRegistrationMap[callbackId] {
+                listenerRegistration.remove()
+            }
+            self.listenerRegistrationMap.removeValue(forKey: callbackId)
         }
-        self.listenerRegistrationMap.removeValue(forKey: callbackId)
+
     }
 
     @objc public func removeAllListeners() {
-        for listenerRegistration in self.listenerRegistrationMap.values {
-            listenerRegistration.remove()
+        queue.sync {
+            for listenerRegistration in self.listenerRegistrationMap.values {
+                listenerRegistration.remove()
+            }
+            self.listenerRegistrationMap.removeAll()
         }
-        self.listenerRegistrationMap.removeAll()
+
     }
 }
