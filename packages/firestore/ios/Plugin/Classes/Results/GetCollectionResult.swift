@@ -12,8 +12,8 @@ import Capacitor
         var snapshotsResult = JSArray()
         for documentSnapshot in querySnapshot.documents {
             let originalData = documentSnapshot.data()
-            let sanitizedData = sanitizeNaNValues(originalData)
-            
+            let sanitizedData = sanitizeSpecialValues(originalData)
+
             let snapshotDataResult = FirebaseFirestoreHelper.createJSObjectFromHashMap(sanitizedData)
             var snapshotResult = JSObject()
             snapshotResult["id"] = documentSnapshot.documentID
@@ -38,32 +38,32 @@ import Capacitor
         return result as AnyObject
     }
     
-    private func sanitizeNaNValues(_ dictionary: [String: Any]) -> [String: Any] {
+    private func sanitizeSpecialValues(_ dictionary: [String: Any]) -> [String: Any] {
         var sanitizedDictionary = dictionary
         
         for (key, value) in dictionary {
-            if let number = value as? NSNumber, number.floatValue.isNaN {
-                sanitizedDictionary[key] = NSNull()
-            } else if let nestedDict = value as? [String: Any] {
-                sanitizedDictionary[key] = sanitizeNaNValues(nestedDict)
-            } else if let array = value as? [Any] {
-                sanitizedDictionary[key] = sanitizeNaNArray(array)
-            }
+            sanitizedDictionary[key] = sanitizeValue(value)
         }
         
         return sanitizedDictionary
     }
     
-    private func sanitizeNaNArray(_ array: [Any]) -> [Any] {
-        return array.map { item in
-            if let number = item as? NSNumber, number.floatValue.isNaN {
+    private func sanitizeValue(_ value: Any) -> Any {
+        switch value {
+        case let number as NSNumber:
+            if number.doubleValue.isInfinite || number.doubleValue.isNaN {
                 return NSNull()
-            } else if let nestedDict = item as? [String: Any] {
-                return sanitizeNaNValues(nestedDict)
-            } else if let nestedArray = item as? [Any] {
-                return sanitizeNaNArray(nestedArray)
             }
-            return item
+            return number
+            
+        case let dict as [String: Any]:
+            return sanitizeSpecialValues(dict)
+            
+        case let array as [Any]:
+            return array.map { sanitizeValue($0) }
+            
+        default:
+            return value
         }
     }
 }
